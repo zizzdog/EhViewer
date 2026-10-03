@@ -52,6 +52,7 @@ import com.ehviewer.core.util.toEpochMillis
 import com.ehviewer.core.util.toLocalDateTime
 import com.ehviewer.core.util.withIOContext
 import com.hippo.ehviewer.EhDB
+import com.ehviewer.core.files.list
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.EhUtils
@@ -60,6 +61,7 @@ import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.DownloadService
 import com.hippo.ehviewer.download.downloadDir
 import com.hippo.ehviewer.download.downloadLocation
+import com.hippo.ehviewer.download.downloadThumbLocation
 import com.hippo.ehviewer.download.tempDownloadDir
 import com.hippo.ehviewer.ui.destinations.ReaderScreenDestination
 import com.hippo.ehviewer.ui.reader.ReaderScreenArgs
@@ -109,6 +111,11 @@ suspend fun keepNoMediaFileStatus(downloadDir: Path = downloadLocation, mediaSca
                 ensureNoMediaFile(downloadDir)
             }
         }
+    }
+    // Also ensure .nomedia in unified thumb directory
+    val thumbDir = downloadThumbLocation
+    if (thumbDir.isDirectory) {
+        ensureNoMediaFile(thumbDir)
     }
 }
 
@@ -373,8 +380,10 @@ suspend fun confirmRemoveDownloadRange(list: Collection<DownloadInfo>) {
         if (checked) {
             list.forEach { info ->
                 // Delete file
+                info.dirname?.let { (downloadLocation / "$it.cbz").delete() }
                 info.downloadDir?.delete()
                 info.tempDownloadDir?.delete()
+                downloadThumbLocation.list().filter { it.name.startsWith("${info.gid}.") }.forEach { it.delete() }
                 // Remove download path
                 EhDB.removeDownloadDirname(info.gid)
             }

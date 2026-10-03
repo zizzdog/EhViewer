@@ -16,6 +16,7 @@ import com.hippo.ehviewer.EhApplication.Companion.thumbCache
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.client.getThumbKey
 import com.hippo.ehviewer.download.downloadLocation
+import com.hippo.ehviewer.download.downloadThumbLocation
 
 private val downloadInfoKey = Extras.Key<DownloadInfo?>(default = null)
 
@@ -35,11 +36,12 @@ object DownloadThumbInterceptor : Interceptor {
                 info.thumbKey = thumbKey
                 EhDB.putGalleryInfo(info.galleryInfo)
             }
-            val dir = downloadLocation / info.dirname!!
             val format = thumbKey.substringAfterLast('.', "")
             check(format.isNotBlank())
-            val thumb = dir / "thumb.$format"
-            val v1Thumb = dir / "thumb.jpg"
+
+            val thumbDir = downloadThumbLocation
+            val thumb = thumbDir / "${info.gid}.$format"
+            val v1Thumb = thumbDir / "${info.gid}.jpg"
             if (thumb.isFile) {
                 val new = chain.request.newBuilder().data(thumb.toUri()).build()
                 val result = chain.withRequest(new).proceed()
@@ -48,8 +50,21 @@ object DownloadThumbInterceptor : Interceptor {
                     return result
                 }
             }
+
+            // Fallback: check legacy gallery subfolder if it still exists
+            val legacyDir = downloadLocation / info.dirname!!
+            val legacyThumb = legacyDir / "thumb.$format"
+            if (legacyThumb.isFile) {
+                val new = chain.request.newBuilder().data(legacyThumb.toUri()).build()
+                val result = chain.withRequest(new).proceed()
+                if (result is SuccessResult) {
+                    runCatching { legacyThumb sendTo thumb }
+                    return result
+                }
+            }
+
             val result = chain.proceed()
-            if (result is SuccessResult && dir.isDirectory) {
+            if (result is SuccessResult && thumbDir.isDirectory) {
                 // Accessing the recreated file immediately after deleting it throws
                 // FileNotFoundException, so we just overwrite the existing file.
                 val key = requireNotNull(chain.request.memoryCacheKey)

@@ -43,6 +43,7 @@ import com.hippo.ehviewer.coil.read
 import com.hippo.ehviewer.coil.suspendEdit
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.downloadLocation
+import com.hippo.ehviewer.download.downloadThumbLocation
 import com.hippo.ehviewer.download.tempDownloadDir
 import com.hippo.ehviewer.image.PathSource
 import com.hippo.ehviewer.jni.archiveFdBatch
@@ -284,23 +285,44 @@ class SpiderDen(val info: GalleryInfo) {
         }
     } == true
 
+    private fun saveThumbToUnifiedLocation() {
+        runCatching {
+            val thumbDir = downloadThumbLocation
+            val existingThumb = downloadDir?.list()?.firstOrNull { it.name.startsWith("thumb.") }
+            if (existingThumb != null) {
+                val format = existingThumb.name.substringAfterLast('.', "jpg")
+                existingThumb sendTo (thumbDir / "$gid.$format")
+            } else {
+                val firstPage = findImageFile(0)
+                if (firstPage != null) {
+                    val ext = getExtension(0) ?: "jpg"
+                    firstPage sendTo (thumbDir / "$gid.$ext")
+                }
+            }
+        }.onFailure {
+            logcat(it)
+        }
+    }
+
     // Postpone this to `SpiderQueen.stop` because files may still be in use by reader
     suspend fun postArchive(): Boolean {
         val dir = downloadDir
-        val archived = saveAsCbz && dir?.find(archiveName) != null
-        if (archived) {
-            dir.list().parMap(concurrency = 10) {
-                if (it.name.matches(FileNameRegex)) {
-                    it.delete()
-                }
-            }
-            (dir / SpiderQueen.SPIDER_INFO_FILENAME).delete()
+        val cbzFile = dir?.find(archiveName)
+        val archived = saveAsCbz && cbzFile != null
+        if (archived && dir != null) {
+            val dirname = info.downloadDirname()
+            val targetCbz = downloadLocation / "$dirname.cbz"
+            cbzFile moveTo targetCbz
+
+            saveThumbToUnifiedLocation()
+
+            dir.delete()
             tempDownloadDir?.delete()
         }
         return archived
     }
 
-    suspend fun exportAsCbz(file: Path) = downloadDir!!.find(archiveName)?.sendTo(file) ?: archiveTo(file)
+    suspend fun exportAsCbz(file: Path) = (downloadLocation.find("${info.downloadDirname()}.cbz") ?: downloadDir?.find(archiveName))?.sendTo(file) ?: archiveTo(file)
 
     private suspend fun archiveTo(file: Path) = resourceScope {
         val comicInfo = closeable {
