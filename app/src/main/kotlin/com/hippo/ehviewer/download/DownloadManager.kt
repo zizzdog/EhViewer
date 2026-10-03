@@ -34,7 +34,6 @@ import com.ehviewer.core.database.model.DownloadArtist
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.database.model.DownloadLabel
 import com.ehviewer.core.files.delete
-import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
 import com.ehviewer.core.files.isDirectory
 import com.ehviewer.core.files.isFile
@@ -42,7 +41,6 @@ import com.ehviewer.core.files.list
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.files.toUri
-import com.ehviewer.core.files.write
 import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.preferences.edit
@@ -76,6 +74,7 @@ import logcat.LogPriority
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
+import splitties.init.appCtx
 
 object DownloadManager : OnSpiderListener, CoroutineScope {
     override val coroutineContext = Dispatchers.IO + Job()
@@ -858,10 +857,6 @@ val DownloadInfo.archiveFile get(): Path? {
 val GalleryInfo.tempDownloadDir get() = AppConfig.externalTempPersistDir?.let { it / "$gid" }
 
 val downloadThumbLocation: Path
-    get() = (downloadLocation / "thumb").apply {
-        if (!isDirectory) {
-            mkdirs()
-            val noMedia = this / ".nomedia"
-            if (!noMedia.exists()) noMedia.write {}
-        }
+    get() = (appCtx.cacheDir.toOkioPath() / "download_thumbs").apply {
+        if (!isDirectory) mkdirs()
     }

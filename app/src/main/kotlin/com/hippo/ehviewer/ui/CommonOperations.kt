@@ -39,6 +39,7 @@ import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.isDirectory
+import com.ehviewer.core.files.list
 import com.ehviewer.core.files.write
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
@@ -52,7 +53,6 @@ import com.ehviewer.core.util.toEpochMillis
 import com.ehviewer.core.util.toLocalDateTime
 import com.ehviewer.core.util.withIOContext
 import com.hippo.ehviewer.EhDB
-import com.ehviewer.core.files.list
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.EhUtils
@@ -111,11 +111,6 @@ suspend fun keepNoMediaFileStatus(downloadDir: Path = downloadLocation, mediaSca
                 ensureNoMediaFile(downloadDir)
             }
         }
-    }
-    // Also ensure .nomedia in unified thumb directory
-    val thumbDir = downloadThumbLocation
-    if (thumbDir.isDirectory) {
-        ensureNoMediaFile(thumbDir)
     }
 }
 
