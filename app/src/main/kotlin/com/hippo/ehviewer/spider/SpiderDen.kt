@@ -78,7 +78,7 @@ class SpiderDen(val info: GalleryInfo) {
     }
 
     private val imageDir
-        get() = tempDownloadDir.takeIf { saveAsCbz } ?: downloadDir
+        get() = downloadDir
 
     constructor(info: GalleryInfo, dirname: String) : this(info) {
         downloadDir = downloadLocation / dirname
@@ -94,9 +94,6 @@ class SpiderDen(val info: GalleryInfo) {
         if (mode == SpiderQueen.MODE_DOWNLOAD) {
             if (downloadDir == null) {
                 downloadDir = getGalleryDownloadDir(info).apply { mkdirs() }
-            }
-            if (saveAsCbz && tempDownloadDir == null) {
-                tempDownloadDir = info.tempDownloadDir!!.apply { mkdirs() }
             }
         }
     }
@@ -275,14 +272,14 @@ class SpiderDen(val info: GalleryInfo) {
     }
 
     suspend fun archive() = saveAsCbz && downloadDir?.run {
-        resolve(archiveName).let { file ->
-            runCatching {
-                archiveTo(file)
-            }.onFailure {
-                file.delete()
-                logcat(it)
-            }.isFailure
-        }
+        val dirname = info.downloadDirname()
+        val targetCbz = downloadLocation / "$dirname.cbz"
+        runCatching {
+            archiveTo(targetCbz)
+        }.onFailure {
+            targetCbz.delete()
+            logcat(it)
+        }.isFailure
     } == true
 
     private fun saveThumbToUnifiedLocation() {
@@ -307,15 +304,11 @@ class SpiderDen(val info: GalleryInfo) {
     // Postpone this to `SpiderQueen.stop` because files may still be in use by reader
     suspend fun postArchive(): Boolean {
         val dir = downloadDir
-        val cbzFile = dir?.find(archiveName)
-        val archived = saveAsCbz && cbzFile != null
+        val flatCbzName = "${info.downloadDirname()}.cbz"
+        val flatCbz = downloadLocation.find(flatCbzName)
+        val archived = saveAsCbz && flatCbz != null
         if (archived && dir != null) {
-            val dirname = info.downloadDirname()
-            val targetCbz = downloadLocation / "$dirname.cbz"
-            cbzFile moveTo targetCbz
-
             saveThumbToUnifiedLocation()
-
             dir.delete()
             tempDownloadDir?.delete()
         }
