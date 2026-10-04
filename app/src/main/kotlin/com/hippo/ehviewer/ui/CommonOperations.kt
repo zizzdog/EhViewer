@@ -39,7 +39,6 @@ import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.isDirectory
-import com.ehviewer.core.files.list
 import com.ehviewer.core.files.write
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
@@ -59,6 +58,7 @@ import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.client.exception.EhException
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.DownloadService
+import com.hippo.ehviewer.download.deleteLocalFiles
 import com.hippo.ehviewer.download.downloadDir
 import com.hippo.ehviewer.download.downloadLocation
 import com.hippo.ehviewer.download.downloadThumbLocation
@@ -374,11 +374,7 @@ suspend fun confirmRemoveDownloadRange(list: Collection<DownloadInfo>) {
         // Delete image files
         if (checked) {
             list.forEach { info ->
-                // Delete file
-                info.dirname?.let { (downloadLocation / "$it.cbz").delete() }
-                info.downloadDir?.delete()
-                info.tempDownloadDir?.delete()
-                downloadThumbLocation.list().filter { it.name.startsWith("${info.gid}.") }.forEach { it.delete() }
+                info.deleteLocalFiles()
                 // Remove download path
                 EhDB.removeDownloadDirname(info.gid)
             }

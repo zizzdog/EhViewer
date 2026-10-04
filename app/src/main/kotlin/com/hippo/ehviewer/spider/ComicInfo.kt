@@ -44,7 +44,6 @@ import splitties.init.appCtx
 
 const val COMIC_INFO_FILE = "ComicInfo.xml"
 private const val TAG_ORIGINAL = "original"
-private val LANGUAGE_MODIFIERS = setOf("translated", "rewrite", "speechless", "text cleaned")
 
 private val xml = XML {
     recommended {
@@ -73,7 +72,6 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
     val rawArtists = mutableListOf<String>()
     val rawGroups = mutableListOf<String>()
     val rawCharacters = mutableListOf<String>()
-    val rawLanguages = mutableListOf<String>()
     val rawTags = mutableListOf<Pair<TagNamespace, String>>()
 
     with(TagNamespace) {
@@ -84,14 +82,7 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
                     Artist, Cosplayer -> rawArtists.addAll(list)
                     Group -> rawGroups.addAll(list)
                     Character -> rawCharacters.addAll(list)
-                    Language -> list.forEach { tag ->
-                        if (tag.lowercase() in LANGUAGE_MODIFIERS) {
-                            rawTags.add(ns to tag)
-                        } else {
-                            rawLanguages.add(tag)
-                        }
-                    }
-                    Female, Male, Mixed, Location, Other, Parody, Reclass -> {
+                    Female, Male, Mixed, Location, Other, Parody, Reclass, Language -> {
                         list.forEach { tag -> rawTags.add(ns to tag) }
                     }
                     else -> Unit
@@ -104,14 +95,7 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
                     Artist, Cosplayer -> rawArtists.add(tag)
                     Group -> rawGroups.add(tag)
                     Character -> rawCharacters.add(tag)
-                    Language -> {
-                        if (tag.lowercase() in LANGUAGE_MODIFIERS) {
-                            rawTags.add(ns to tag)
-                        } else {
-                            rawLanguages.add(tag)
-                        }
-                    }
-                    Female, Male, Mixed, Location, Other, Parody, Reclass -> {
+                    Female, Male, Mixed, Location, Other, Parody, Reclass, Language -> {
                         if (ns != Parody || tag != TAG_ORIGINAL) {
                             rawTags.add(ns to tag)
                         }
@@ -134,56 +118,6 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
     val translatedArtists = rawArtists.map { it.translate(Artist) }.distinct()
     val translatedGroups = rawGroups.map { it.translate(Group) }.distinct()
     val translatedCharacters = rawCharacters.map { it.translate(Character) }.distinct()
-    val translatedLanguages = if (canTranslate) {
-        rawLanguages.map { it.translate(Language) }.distinct()
-    } else {
-        rawLanguages.map { it.replaceFirstChar(Char::titlecase) }.distinct()
-    }
-
-    val languageStr = if (translatedLanguages.isNotEmpty()) {
-        translatedLanguages.joinToString(", ")
-    } else {
-        if (canTranslate) {
-            when (simpleLanguage?.uppercase()) {
-                "ZH" -> "中文"
-                "JA" -> "日语"
-                "EN" -> "英语"
-                "KO" -> "韩语"
-                "RU" -> "俄语"
-                "FR" -> "法语"
-                "DE" -> "德语"
-                "ES" -> "西班牙语"
-                "IT" -> "意大利语"
-                "VI" -> "越南语"
-                "TH" -> "泰语"
-                "PT" -> "葡萄牙语"
-                "PL" -> "波兰语"
-                "HU" -> "匈牙利语"
-                "NL" -> "荷兰语"
-                else -> simpleLanguage?.lowercase()
-            }
-        } else {
-            when (simpleLanguage?.uppercase()) {
-                "ZH" -> "Chinese"
-                "JA" -> "Japanese"
-                "EN" -> "English"
-                "KO" -> "Korean"
-                "RU" -> "Russian"
-                "FR" -> "French"
-                "DE" -> "German"
-                "ES" -> "Spanish"
-                "IT" -> "Italian"
-                "VI" -> "Vietnamese"
-                "TH" -> "Thai"
-                "PT" -> "Portuguese"
-                "PL" -> "Polish"
-                "HU" -> "Hungarian"
-                "NL" -> "Dutch"
-                else -> simpleLanguage?.lowercase()
-            }
-        }
-    }
-
     val translatedTags = rawTags.map { (ns, tag) ->
         val nsText = if (canTranslate) ns.translate() else ns.value
         val tagText = tag.translate(ns)
@@ -216,7 +150,7 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
         tags = finalTags.ifEmpty { null },
         web = EhUrl.getGalleryDetailUrl(gid, token),
         pageCount = pages,
-        languageISO = languageStr?.ifBlank { null },
+        languageISO = simpleLanguage?.lowercase(),
         characters = translatedCharacters.ifEmpty { null },
         communityRating = "%.1f".format(rating),
     )

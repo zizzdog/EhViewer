@@ -282,8 +282,8 @@ class SpiderDen(val info: GalleryInfo) {
         }.isFailure
     } == true
 
-    private fun saveThumbToUnifiedLocation() {
-        runCatching {
+    private suspend fun saveThumbToUnifiedLocation() {
+        runSuspendCatching {
             val thumbDir = downloadThumbLocation
             val existingThumb = downloadDir?.list()?.firstOrNull { it.name.startsWith("thumb.") }
             if (existingThumb != null) {

@@ -391,10 +391,7 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
             ensureDownload()
 
             if (deleteFiles) {
-                info.dirname?.let { (downloadLocation / "$it.cbz").delete() }
-                info.downloadDir?.delete()
-                info.tempDownloadDir?.delete()
-                downloadThumbLocation.list().filter { it.name.startsWith("${info.gid}.") }.forEach { it.delete() }
+                info.deleteLocalFiles()
                 EhDB.removeDownloadDirname(info.gid)
             }
         }
@@ -848,8 +845,8 @@ var downloadLocation: Path
 
 val DownloadInfo.downloadDir get() = dirname?.let { downloadLocation / it }
 val DownloadInfo.archiveFile get(): Path? {
-    val flatCbz = dirname?.let { downloadLocation / "$it.cbz" }
-    if (flatCbz != null && flatCbz.isFile) {
+    val flatCbz = dirname?.let { downloadLocation.find("$it.cbz") }
+    if (flatCbz != null) {
         return flatCbz
     }
     return downloadDir?.run { find("$gid.cbz") ?: find("$gid.zip") }
@@ -860,3 +857,11 @@ val downloadThumbLocation: Path
     get() = (appCtx.cacheDir.toOkioPath() / "download_thumbs").apply {
         if (!isDirectory) mkdirs()
     }
+
+fun DownloadInfo.deleteLocalFiles() {
+    dirname?.let { (downloadLocation / "$it.cbz").delete() }
+    downloadDir?.delete()
+    (downloadThumbLocation / "$gid.jpg").delete()
+    (downloadThumbLocation / "$gid.png").delete()
+    (downloadThumbLocation / "$gid.webp").delete()
+}
