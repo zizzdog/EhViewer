@@ -25,7 +25,9 @@ import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
 import com.ehviewer.core.files.isDirectory
+import com.ehviewer.core.files.isFile
 import com.ehviewer.core.files.list
+import com.ehviewer.core.files.metadataOrNull
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.moveTo
 import com.ehviewer.core.files.openFileDescriptor
@@ -55,8 +57,10 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.request
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.zip.ZipFile
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import moe.tarsin.coroutines.runSuspendCatching
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import splitties.init.appCtx
@@ -276,11 +280,34 @@ class SpiderDen(val info: GalleryInfo) {
         val targetCbz = downloadLocation / "$dirname.cbz"
         runCatching {
             archiveTo(targetCbz)
+            // archiveFdBatch() never reports write failures, so the CBZ may exist yet be
+            // truncated. Verify it here, before postArchive() deletes the source images,
+            // otherwise a corrupt archive silently replaces them.
+            check(verifyFlatCbz(targetCbz)) { "Archived CBZ failed verification: $targetCbz" }
         }.onFailure {
             targetCbz.delete()
             logcat(it)
         }.isFailure
     } == true
+
+    private fun verifyFlatCbz(file: Path): Boolean = runSuspendCatching {
+        // ZipFile only accepts a real filesystem path; content:// archives are checked by size
+        val target = if (file.toString().startsWith('/')) file.toFile() else null
+        check(file.isFile) { "Archive not created" }
+        check(file.metadataOrNull()?.size?.let { it > 0 } != false) { "Archive is empty" }
+        if (target != null) {
+            val expected = (0 until info.pages).map { perFilename(it) }
+            ZipFile(target).use { zip ->
+                val names = zip.entries().asSequence().map { it.name.substringAfterLast('/') }.toSet()
+                check(expected.all(names::contains)) { "Archive is missing image entries" }
+                check(COMIC_INFO_FILE in names) { "Archive is missing $COMIC_INFO_FILE" }
+            }
+        }
+        true
+    }.getOrElse {
+        logcat(it)
+        false
+    }
 
     private suspend fun saveThumbToUnifiedLocation() {
         runSuspendCatching {

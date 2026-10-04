@@ -61,8 +61,6 @@ import com.hippo.ehviewer.download.DownloadService
 import com.hippo.ehviewer.download.deleteLocalFiles
 import com.hippo.ehviewer.download.downloadDir
 import com.hippo.ehviewer.download.downloadLocation
-import com.hippo.ehviewer.download.downloadThumbLocation
-import com.hippo.ehviewer.download.tempDownloadDir
 import com.hippo.ehviewer.ui.destinations.ReaderScreenDestination
 import com.hippo.ehviewer.ui.reader.ReaderScreenArgs
 import com.hippo.ehviewer.ui.tools.DialogState
