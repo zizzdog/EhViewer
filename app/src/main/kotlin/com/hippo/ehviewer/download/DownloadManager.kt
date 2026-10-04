@@ -701,6 +701,9 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
                 info.total = total
                 info.legacy = total - finished
                 info.state = if (failed) DownloadInfo.STATE_FAILED else DownloadInfo.STATE_FINISH
+                if (info.galleryInfo.pages == 0 && total > 0) {
+                    info.galleryInfo.pages = total
+                }
                 EhDB.putDownloadInfo(info)
                 mDownloadListener?.onFinish(info)
                 mutableNotifyFlow.emit(info)

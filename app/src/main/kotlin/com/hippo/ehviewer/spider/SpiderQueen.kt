@@ -19,11 +19,14 @@ package com.hippo.ehviewer.spider
 import androidx.annotation.IntDef
 import arrow.core.getOrElse
 import arrow.core.partially1
+import com.ehviewer.core.data.model.asEntity
 import com.ehviewer.core.files.find
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.model.GalleryPreview
+import com.ehviewer.core.util.launchIO
 import com.ehviewer.core.util.logcat
+import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.EhUrl
@@ -32,6 +35,7 @@ import com.hippo.ehviewer.client.EhUrl.referer
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.client.exception.FatalException
 import com.hippo.ehviewer.client.exception.QuotaExceededException
+import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.util.displayString
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -224,8 +228,14 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
         spiderInfo = info
         val pages = info.pages
         check(pages > 0)
-        if (galleryInfo.pages == 0) {
+        if (galleryInfo.pages != pages) {
             galleryInfo.pages = pages
+            launchIO {
+                EhDB.putGalleryInfo(galleryInfo.asEntity().apply { this.pages = pages })
+                DownloadManager.getDownloadInfo(galleryInfo.gid)?.let { di ->
+                    di.galleryInfo.pages = pages
+                }
+            }
         }
         pageStates = IntArray(pages)
         notifyGetPages(pages)

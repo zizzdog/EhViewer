@@ -220,85 +220,87 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                 summary = stringResource(id = R.string.settings_download_archive_metadata_summary),
                 state = Settings.archiveMetadata.asMutableState(),
             )
-            WorkPreference(
-                title = stringResource(id = R.string.settings_download_reload_metadata),
-                summary = stringResource(id = R.string.settings_download_reload_metadata_summary),
-            ) {
-                fun DownloadInfo.isStable(): Boolean {
-                    val downloadTime = downloadDir?.resolve(COMIC_INFO_FILE)?.metadataOrNull()?.lastModifiedAtMillis ?: return false
-                    val postedTime = posted?.let { ParserUtils.parseDate(it) } ?: return false
-                    // stable 30 days after posted
-                    val stableTime = postedTime + 30L * 24L * 60L * 60L * 1000L
-                    return downloadTime > stableTime
-                }
-
-                runSuspendCatching {
-                    DownloadManager.downloadInfoList.parMapNotNull {
-                        if (it.state == DownloadInfo.STATE_FINISH && !it.isStable()) it else null
-                    }.apply {
-                        fillGalleryListByApi(this, EhUrl.referer)
-                        val toUpdate = parMap { di ->
-                            di.galleryInfo.also { SpiderDen(it, di.dirname!!).writeComicInfo(false) }
-                        }
-                        EhDB.updateGalleryInfo(toUpdate)
-                        launchSnackbar(string(R.string.settings_download_reload_metadata_successfully, toUpdate.size))
+            if (false) {
+                WorkPreference(
+                    title = stringResource(id = R.string.settings_download_reload_metadata),
+                    summary = stringResource(id = R.string.settings_download_reload_metadata_summary),
+                ) {
+                    fun DownloadInfo.isStable(): Boolean {
+                        val downloadTime = downloadDir?.resolve(COMIC_INFO_FILE)?.metadataOrNull()?.lastModifiedAtMillis ?: return false
+                        val postedTime = posted?.let { ParserUtils.parseDate(it) } ?: return false
+                        // stable 30 days after posted
+                        val stableTime = postedTime + 30L * 24L * 60L * 60L * 1000L
+                        return downloadTime > stableTime
                     }
-                }.onFailure {
-                    launchSnackbar(string(R.string.settings_download_reload_metadata_failed, it.displayString()))
-                }
-            }
-            val restoreFailed = stringResource(id = R.string.settings_download_restore_failed)
-            WorkPreference(
-                title = stringResource(id = R.string.settings_download_restore_download_items),
-                summary = stringResource(id = R.string.settings_download_restore_download_items_summary),
-            ) {
-                var restoreDirCount = 0
-                suspend fun getRestoreItem(file: Path): RestoreItem? {
-                    if (!file.isDirectory) return null
-                    return runSuspendCatching {
-                        val (gid, token) = file.find(SPIDER_INFO_FILENAME)?.let {
-                            readCompatFromPath(it)?.run {
-                                GalleryDetailUrlParser.Result(gid, token)
+
+                    runSuspendCatching {
+                        DownloadManager.downloadInfoList.parMapNotNull {
+                            if (it.state == DownloadInfo.STATE_FINISH && !it.isStable()) it else null
+                        }.apply {
+                            fillGalleryListByApi(this, EhUrl.referer)
+                            val toUpdate = parMap { di ->
+                                di.galleryInfo.also { SpiderDen(it, di.dirname!!).writeComicInfo(false) }
                             }
-                        } ?: file.find(COMIC_INFO_FILE)?.let {
-                            readComicInfo(it)?.run {
-                                GalleryDetailUrlParser.parse(web)
-                            }
-                        } ?: return null
-                        val dirname = file.name
-                        if (DownloadManager.containDownloadInfo(gid)) {
-                            // Restore download dir to avoid redownload
-                            val dbdirname = EhDB.getDownloadDirname(gid)
-                            if (null == dbdirname || dirname != dbdirname) {
-                                EhDB.putDownloadDirname(gid, dirname)
-                                restoreDirCount++
-                            }
-                            return null
+                            EhDB.updateGalleryInfo(toUpdate)
+                            launchSnackbar(string(R.string.settings_download_reload_metadata_successfully, toUpdate.size))
                         }
-                        RestoreItem(dirname, gid, token)
+                    }.onFailure {
+                        launchSnackbar(string(R.string.settings_download_reload_metadata_failed, it.displayString()))
+                    }
+                }
+                val restoreFailed = stringResource(id = R.string.settings_download_restore_failed)
+                WorkPreference(
+                    title = stringResource(id = R.string.settings_download_restore_download_items),
+                    summary = stringResource(id = R.string.settings_download_restore_download_items_summary),
+                ) {
+                    var restoreDirCount = 0
+                    suspend fun getRestoreItem(file: Path): RestoreItem? {
+                        if (!file.isDirectory) return null
+                        return runSuspendCatching {
+                            val (gid, token) = file.find(SPIDER_INFO_FILENAME)?.let {
+                                readCompatFromPath(it)?.run {
+                                    GalleryDetailUrlParser.Result(gid, token)
+                                }
+                            } ?: file.find(COMIC_INFO_FILE)?.let {
+                                readComicInfo(it)?.run {
+                                    GalleryDetailUrlParser.parse(web)
+                                }
+                            } ?: return null
+                            val dirname = file.name
+                            if (DownloadManager.containDownloadInfo(gid)) {
+                                // Restore download dir to avoid redownload
+                                val dbdirname = EhDB.getDownloadDirname(gid)
+                                if (null == dbdirname || dirname != dbdirname) {
+                                    EhDB.putDownloadDirname(gid, dirname)
+                                    restoreDirCount++
+                                }
+                                return null
+                            }
+                            RestoreItem(dirname, gid, token)
+                        }.onFailure {
+                            logcat(it)
+                        }.getOrNull()
+                    }
+                    runSuspendCatching {
+                        val result = downloadLocation.list().parMapNotNull { getRestoreItem(it) }.also {
+                            fillGalleryListByApi(it, EhUrl.referer)
+                        }
+                        if (result.isEmpty()) {
+                            launchSnackbar(RESTORE_COUNT_MSG(restoreDirCount))
+                        } else {
+                            val count = result.parMap {
+                                if (it.pages != 0) {
+                                    EhDB.putDownloadDirname(it.gid, it.dirname)
+                                    DownloadManager.restoreDownload(it.galleryInfo, it.dirname)
+                                    SpiderDen(it.galleryInfo, it.dirname).writeComicInfo(false)
+                                }
+                            }.size
+                            launchSnackbar(RESTORE_COUNT_MSG(count + restoreDirCount))
+                        }
                     }.onFailure {
                         logcat(it)
-                    }.getOrNull()
-                }
-                runSuspendCatching {
-                    val result = downloadLocation.list().parMapNotNull { getRestoreItem(it) }.also {
-                        fillGalleryListByApi(it, EhUrl.referer)
+                        launchSnackbar(restoreFailed)
                     }
-                    if (result.isEmpty()) {
-                        launchSnackbar(RESTORE_COUNT_MSG(restoreDirCount))
-                    } else {
-                        val count = result.parMap {
-                            if (it.pages != 0) {
-                                EhDB.putDownloadDirname(it.gid, it.dirname)
-                                DownloadManager.restoreDownload(it.galleryInfo, it.dirname)
-                                SpiderDen(it.galleryInfo, it.dirname).writeComicInfo(false)
-                            }
-                        }.size
-                        launchSnackbar(RESTORE_COUNT_MSG(count + restoreDirCount))
-                    }
-                }.onFailure {
-                    logcat(it)
-                    launchSnackbar(restoreFailed)
                 }
             }
             WorkPreference(
@@ -306,10 +308,19 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                 summary = stringResource(id = R.string.settings_download_clean_redundancy_summary),
             ) {
                 fun isRedundant(file: Path): Boolean {
-                    if (!file.isDirectory) return false
                     val name = file.name
-                    val gid = name.substringBefore('-').toLongOrNull() ?: return false
-                    return name != DownloadManager.getDownloadInfo(gid)?.dirname
+                    if (file.isDirectory) {
+                        val gid = name.substringBefore('-').toLongOrNull() ?: return false
+                        val downloadInfo = DownloadManager.getDownloadInfo(gid) ?: return true
+                        return name != downloadInfo.dirname
+                    }
+                    if (name.endsWith(".cbz", ignoreCase = true)) {
+                        val baseName = name.substringBeforeLast('.')
+                        val gid = baseName.substringBefore('-').toLongOrNull() ?: return false
+                        val downloadInfo = DownloadManager.getDownloadInfo(gid) ?: return true
+                        return downloadInfo.dirname?.let { baseName != it && baseName != "$gid" } ?: false
+                    }
+                    return false
                 }
                 val list = downloadLocation.list().filter(::isRedundant)
                 if (list.isNotEmpty()) {
