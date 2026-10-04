@@ -30,7 +30,10 @@ val ImageRequest.downloadInfo: DownloadInfo?
 object DownloadThumbInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val info = chain.request.downloadInfo
-        if (info != null && !info.dirname.isNullOrBlank()) {
+        // dirname may be absent (imported database, or a download whose row was lost).
+        // Only the legacy gallery-subfolder fallback below needs it, so don't gate the
+        // whole interceptor on it: otherwise the network thumbnail is never cached.
+        if (info != null) {
             val thumbKey = getThumbKey(chain.request.data as String)
             if (info.thumbKey != thumbKey) {
                 info.thumbKey = thumbKey
@@ -52,14 +55,16 @@ object DownloadThumbInterceptor : Interceptor {
             }
 
             // Fallback: check legacy gallery subfolder if it still exists
-            val legacyDir = downloadLocation / info.dirname!!
-            val legacyThumb = legacyDir / "thumb.$format"
-            if (legacyThumb.isFile) {
-                val new = chain.request.newBuilder().data(legacyThumb.toUri()).build()
-                val result = chain.withRequest(new).proceed()
-                if (result is SuccessResult) {
-                    runCatching { legacyThumb sendTo thumb }
-                    return result
+            val legacyDir = info.dirname?.takeIf { it.isNotBlank() }?.let { downloadLocation / it }
+            if (legacyDir != null) {
+                val legacyThumb = legacyDir / "thumb.$format"
+                if (legacyThumb.isFile) {
+                    val new = chain.request.newBuilder().data(legacyThumb.toUri()).build()
+                    val result = chain.withRequest(new).proceed()
+                    if (result is SuccessResult) {
+                        runCatching { legacyThumb sendTo thumb }
+                        return result
+                    }
                 }
             }
 
