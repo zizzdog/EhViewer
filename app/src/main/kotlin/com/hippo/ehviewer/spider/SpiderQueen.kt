@@ -17,7 +17,6 @@
 package com.hippo.ehviewer.spider
 
 import androidx.annotation.IntDef
-import arrow.core.Either
 import arrow.core.getOrElse
 import arrow.core.partially1
 import com.ehviewer.core.files.find
@@ -221,14 +220,13 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
 
     private suspend fun doPrepare() {
         spiderDen.initDownloadDirIfExist()
-        val pages = Either.catch {
-            spiderInfo = readSpiderInfoFromLocal() ?: readSpiderInfoFromInternet()
-            spiderInfo.pages
-        }.getOrElse {
-            logcat(it)
-            galleryInfo.pages
-        }
+        val info = readSpiderInfoFromLocal() ?: readSpiderInfoFromInternet()
+        spiderInfo = info
+        val pages = info.pages
         check(pages > 0)
+        if (galleryInfo.pages == 0) {
+            galleryInfo.pages = pages
+        }
         pageStates = IntArray(pages)
         notifyGetPages(pages)
     }
@@ -251,6 +249,12 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
                 }
                 runCatching {
                     writeSpiderInfoToLocal()
+                }.onFailure {
+                    logcat(it)
+                }
+            } else {
+                runCatching {
+                    if (isReady) spiderInfo.saveToCache()
                 }.onFailure {
                     logcat(it)
                 }
@@ -331,12 +335,17 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
         }
     }
 
-    private suspend fun readSpiderInfoFromInternet() = EhEngine.getPreviewList(
-        getGalleryDetailUrl(galleryInfo.gid, galleryInfo.token),
-    ).run {
-        val spiderInfo = SpiderInfo(galleryInfo.gid, galleryInfo.token, total)
-        readPreviews(previews, 0, spiderInfo)
-        spiderInfo
+    private suspend fun readSpiderInfoFromInternet(): SpiderInfo {
+        val url = getGalleryDetailUrl(galleryInfo.gid, galleryInfo.token)
+        val previewList = runSuspendCatching {
+            EhEngine.getPreviewList(url)
+        }.getOrElse {
+            EhEngine.getPreviewList(url)
+        }
+        return SpiderInfo(galleryInfo.gid, galleryInfo.token, previewList.total).apply {
+            readPreviews(previewList.previews, 0, this)
+            saveToCache()
+        }
     }
 
     private val isMpvAvailable = EhUtils.isMpvAvailable
