@@ -3,7 +3,6 @@ package com.hippo.ehviewer.spider
 import com.ehviewer.core.database.util.SimpleTagsConverter
 import com.ehviewer.core.files.read
 import com.ehviewer.core.files.write
-import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.model.GalleryTag
@@ -54,17 +53,30 @@ private val xml = XML {
     setIndent(2)
 }
 
-private val CATEGORY_RES = mapOf(
-    EhUtils.DOUJINSHI to R.string.doujinshi,
-    EhUtils.MANGA to R.string.manga,
-    EhUtils.ARTIST_CG to R.string.artist_cg,
-    EhUtils.GAME_CG to R.string.game_cg,
-    EhUtils.WESTERN to R.string.western,
-    EhUtils.NON_H to R.string.non_h,
-    EhUtils.IMAGE_SET to R.string.image_set,
-    EhUtils.COSPLAY to R.string.cosplay,
-    EhUtils.ASIAN_PORN to R.string.asian_porn,
-    EhUtils.MISC to R.string.misc,
+private val CATEGORY_TRANSLATIONS = mapOf(
+    EhUtils.DOUJINSHI to "同人志",
+    EhUtils.MANGA to "漫画",
+    EhUtils.ARTIST_CG to "画师CG",
+    EhUtils.GAME_CG to "游戏CG",
+    EhUtils.WESTERN to "西方",
+    EhUtils.NON_H to "无H",
+    EhUtils.IMAGE_SET to "图集",
+    EhUtils.COSPLAY to "Cosplay",
+    EhUtils.ASIAN_PORN to "亚洲色情",
+    EhUtils.MISC to "杂项",
+)
+
+private val CATEGORY_EN_NAMES = mapOf(
+    EhUtils.DOUJINSHI to "Doujinshi",
+    EhUtils.MANGA to "Manga",
+    EhUtils.ARTIST_CG to "Artist CG",
+    EhUtils.GAME_CG to "Game CG",
+    EhUtils.WESTERN to "Western",
+    EhUtils.NON_H to "Non-H",
+    EhUtils.IMAGE_SET to "Image Set",
+    EhUtils.COSPLAY to "Cosplay",
+    EhUtils.ASIAN_PORN to "Asian Porn",
+    EhUtils.MISC to "Misc",
 )
 
 fun GalleryInfo.getComicInfo(): ComicInfo {
@@ -133,11 +145,14 @@ fun GalleryInfo.getComicInfo(): ComicInfo {
     }
     val finalTags = (translatedTags + listOfNotNull(uploaderTag, timestampTag)).distinct()
 
+    val rawCat = EhUtils.getCategory(category)
     val categoryStr = if (canTranslate) {
-        val resId = CATEGORY_RES[category]
-        if (resId != null) appCtx.getString(resId) else EhUtils.getCategory(category)
+        ehTags?.getTranslation(prefix = TagNamespace.Reclass.prefix, tag = rawCat)
+            ?: CATEGORY_TRANSLATIONS[category]
+            ?: CATEGORY_EN_NAMES[category]
+            ?: rawCat
     } else {
-        EhUtils.getCategory(category)
+        CATEGORY_EN_NAMES[category] ?: rawCat
     }
 
     return ComicInfo(
